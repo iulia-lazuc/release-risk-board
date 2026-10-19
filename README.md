@@ -1,5 +1,7 @@
 # Release Risk Board
 
+**Demo:** https://release-risk-board.vercel.app (opens with example data; nothing you do there is stored on a server)
+
 A planning board for release breakdown sessions: epics (grouped by saga) are split into FE / BE / UX milestones, which are dragged into the remaining cycles. Anything that won't fit lands in **Release Risk**.
 
 ## Where the data lives
