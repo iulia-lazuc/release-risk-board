@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Release Risk Board</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: quiet header, then one grid — rows = epics grouped by saga, columns = Milestones | cycles | Release Risk */
+:root {
+  --paper: #f4f6f9; --panel: #ffffff; --ink: #16202e; --muted: #66748a; --line: #e1e6ee; --line-strong: #c9d1dd;
+  --accent: #1f4fd1; --risk: #c2362b; --risk-soft: #fdf0ee;
+  --fe: #0f7c86; --fe-soft: #e2f4f5; --be: #2f55c8; --be-soft: #e7edff; --ux: #8a3fb5; --ux-soft: #f4e9fa;
+  --f-display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0f141c; --panel: #161d28; --ink: #e6ebf2; --muted: #93a1b4; --line: #253041; --line-strong: #34415a;
+  --accent: #7d9dff; --risk: #ff7a6e; --risk-soft: #2e1a19;
+  --fe: #5fd3dc; --fe-soft: #12333a; --be: #8fa9ff; --be-soft: #1b2645; --ux: #d29bf2; --ux-soft: #30203c; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0f141c; --panel: #161d28; --ink: #e6ebf2; --muted: #93a1b4; --line: #253041; --line-strong: #34415a;
+  --accent: #7d9dff; --risk: #ff7a6e; --risk-soft: #2e1a19;
+  --fe: #5fd3dc; --fe-soft: #12333a; --be: #8fa9ff; --be-soft: #1b2645; --ux: #d29bf2; --ux-soft: #30203c; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+.wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(26px, 4vw, 34px); line-height: 1.05; margin: 0; }
+.sub { color: var(--muted); font-size: 13.5px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; padding: 7px 12px; font-weight: 500; }
+.btn:not(.primary):not(.danger) { border-color: transparent; background: transparent; color: var(--muted); }
+.btn:not(.primary):not(.danger):hover { color: var(--ink); background: var(--panel); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.btn.danger.armed { background: var(--risk); border-color: var(--risk); color: var(--panel); }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.banner { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 820px; }
+th, td { vertical-align: top; text-align: left; }
+thead th { padding: 14px 10px 12px; border-bottom: 1px solid var(--line); font-weight: 400; }
+thead th .n { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; display: block; color: var(--ink); }
+thead th .d { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+thead th.risk .n { color: var(--risk); }
+thead th.epic { width: 24%; padding-left: 20px; }
+
+tr.saga td { padding: 22px 20px 4px; font-family: var(--f-display); font-weight: 700; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+tbody tr.ep > td { border-bottom: 1px solid var(--line-strong); }
+tr.saga td { border-bottom: 1px solid var(--line-strong); }
+td.epic { padding: 12px 10px 12px 20px; position: relative; }
+tr.ep.at-risk td.epic::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--risk); }
+.erow { display: flex; gap: 6px; align-items: flex-start; }
+.handle { position: absolute; left: 4px; top: 12px; cursor: grab; color: var(--muted); opacity: 0; padding: 0 2px; user-select: none; }
+tr.ep:hover .handle, .handle:focus-visible { opacity: 1; }
+.readonly .handle, .noreorder .handle { display: none; }
+.btn.editing { color: var(--risk) !important; font-weight: 600; }
+.filebar { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.filebar #fileName { font-family: var(--f-mono); }
+.filebar .unsaved { color: var(--risk); font-weight: 600; }
+.viewbar { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+.viewbar select { border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+.empty-filter td { padding: 28px; text-align: center; color: var(--muted); }
+.einfo { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.etitle { font-weight: 600; background: none; border: 0; padding: 0; text-align: left; overflow-wrap: anywhere; line-height: 1.35; }
+.etitle:hover { color: var(--accent); }
+.meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.why { font-size: 12px; font-weight: 500; color: var(--risk); margin-bottom: 6px; overflow-wrap: anywhere; line-height: 1.35; }
+.meta a { color: var(--muted); font-family: var(--f-mono); text-decoration: none; }
+.meta a:hover { color: var(--accent); text-decoration: underline; }
+.meta .key { font-family: var(--f-mono); }
+.size { font-family: var(--f-mono); font-weight: 600; }
+
+td.cell { padding: 12px 8px; width: 15%; border-left: 1px solid var(--line); }
+td.cell.risk { background: var(--risk-soft); }
+.drop { min-height: 44px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 5px; padding: 3px 8px; font-size: 12px; font-weight: 600; cursor: grab; max-width: 100%; user-select: none; -webkit-user-select: none; border: 1px solid transparent; }
+.readonly .chip { cursor: default; }
+.chip .lb { font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+.chip.FE { background: var(--fe-soft); color: var(--fe); }
+.chip.BE { background: var(--be-soft); color: var(--be); }
+.chip.UX { background: var(--ux-soft); color: var(--ux); }
+.addm { border: 1px dashed var(--line-strong); background: none; color: var(--muted); border-radius: 4px; padding: 2px 8px; font-size: 12px; margin-bottom: 6px; }
+.composer { margin-bottom: 8px; }
+.addm:hover { color: var(--accent); border-color: var(--accent); }
+.readonly .addm { display: none; }
+.sortable-ghost { opacity: .35; }
+
+/* inline milestone composer */
+.composer { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.dis { display: flex; gap: 4px; }
+.dis button { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.dis button[aria-pressed="true"].FE { background: var(--fe-soft); color: var(--fe); border-color: var(--fe); }
+.dis button[aria-pressed="true"].BE { background: var(--be-soft); color: var(--be); border-color: var(--be); }
+.dis button[aria-pressed="true"].UX { background: var(--ux-soft); color: var(--ux); border-color: var(--ux); }
+.composer input { border: 1px solid var(--line-strong); border-radius: 4px; padding: 4px 7px; font-size: 12.5px; background: var(--paper); width: 100%; min-width: 0; }
+.composer .row { display: flex; gap: 4px; }
+.composer .row button { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 4px; padding: 3px 8px; font-size: 12px; }
+.composer .row button.go { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+
+.empty-row td { padding: 32px; text-align: center; color: var(--muted); }
+
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 0; width: min(460px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(10,15,25,.45); }
+.dlg { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.dlg h2 { font-family: var(--f-display); font-weight: 700; font-size: 22px; margin: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label, .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.field textarea { border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 9px; background: var(--paper); width: 100%; min-width: 0; resize: vertical; }
+.field input, .field select { border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 9px; background: var(--paper); width: 100%; min-width: 0; }
+.row2 { display: grid; grid-template-columns: minmax(0,3fr) minmax(0,1fr); gap: 10px; }
+.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.srow { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr) auto; gap: 6px; align-items: center; }
+.srow input { border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 8px; background: var(--paper); min-width: 0; width: 100%; }
+.srow button { border: 1px solid var(--line-strong); background: var(--paper); border-radius: 6px; padding: 6px 9px; }
+.foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.foot .g { display: flex; gap: 8px; flex-wrap: wrap; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+.err { color: var(--risk); font-size: 12.5px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap" id="app">
+  <header>
+    <div>
+      <h1 id="relName">Release</h1>
+      <div class="sub" id="relSub"></div>
+      <div class="filebar"><span id="fileName"></span> <span id="saveState"></span></div>
+      <div class="viewbar"><label for="viewSel">Show</label>
+        <select id="viewSel">
+          <option value="prio">By priority</option>
+          <option value="risk">Release risk first</option>
+          <option value="only" id="optOnly">Only release risk</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions" id="actions">
+      <button class="btn" type="button" id="openBtn">Open Excel</button>
+      <button class="btn" type="button" id="editBtn" aria-pressed="false">Edit</button>
+      <button class="btn" type="button" id="saveBtn" title="Ctrl+S">Save</button>
+      <button class="btn primary" type="button" id="addBtn">Add epic</button>
+      <button class="btn" type="button" id="bulkBtn" hidden>Paste epics</button>
+      <button class="btn" type="button" id="setBtn">Cycles</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="scroll"><table id="grid"><thead id="ghead"></thead></table></div>
+</div>
+
+<dialog id="epicDlg">
+  <form class="dlg" id="epicForm">
+    <h2 id="epicT">Epic</h2>
+    <div class="row2">
+      <div class="field"><label for="fTitle">Title</label><input id="fTitle" maxlength="120" required></div>
+      <div class="field"><label for="fSize">Size</label><select id="fSize"><option>XS</option><option>S</option><option selected>M</option><option>L</option><option>XL</option></select></div>
+    </div>
+    <div class="field"><label for="fJira">Jira link</label><input id="fJira" type="text" maxlength="400" placeholder="Paste the Jira link or the tab title"><span class="hint" id="jiraHint">A link fills in the key. The browser tab title, e.g. [RS-123] Part import - Jira, fills in key and title.</span></div>
+    <div class="field"><label for="fSaga">Saga</label><input id="fSaga" maxlength="80" list="sagaList"><datalist id="sagaList"></datalist></div>
+    <div class="field"><label for="fQ">Open questions</label><textarea id="fQ" rows="3" maxlength="2000" placeholder="One question per line, e.g. Which roles can approve?"></textarea></div>
+    <label class="check"><input type="checkbox" id="fFlag"> Flag as release risk</label>
+    <div class="field" id="reasonWrap"><label for="fReason">Reason</label><input id="fReason" maxlength="140"></div>
+    <div class="foot">
+      <div class="g"><button class="btn danger" type="button" id="delBtn">Delete epic</button></div>
+      <div class="g"><button class="btn" type="button" id="cancelEpic">Close</button><button class="btn primary" type="submit" id="saveEpic">Save</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="bulkDlg">
+  <form class="dlg" id="bulkForm">
+    <h2>Paste epics from Jira</h2>
+    <p class="hint">In Jira, filter the epics for this release, select the rows in the list and copy them. One epic per line also works, e.g. <span style="font-family:var(--f-mono)">RS-123 Part master data import</span>.</p>
+    <div class="field"><label for="bText">Rows</label><textarea id="bText" rows="7"></textarea></div>
+    <div class="field"><label for="bSaga">Saga for all (optional)</label><input id="bSaga" maxlength="80" list="sagaList2"><datalist id="sagaList2"></datalist></div>
+    <p class="hint" id="bInfo">Nothing pasted yet.</p>
+    <div class="foot"><span></span>
+      <div class="g"><button class="btn" type="button" id="bCancel">Cancel</button><button class="btn primary" type="submit" id="bAdd" disabled>Add epics</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="chipDlg">
+  <form class="dlg" id="chipForm">
+    <h2>Milestone</h2>
+    <div class="row2">
+      <div class="field"><label for="cLabel">What</label><input id="cLabel" maxlength="40"></div>
+      <div class="field"><label for="cDis">Discipline</label><select id="cDis"><option>FE</option><option>BE</option><option>UX</option></select></div>
+    </div>
+    <div class="foot">
+      <div class="g"><button class="btn danger" type="button" id="cDel">Delete</button></div>
+      <div class="g"><button class="btn" type="button" id="cCancel">Cancel</button><button class="btn primary" type="submit">Save</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="setDlg">
+  <form class="dlg" id="setForm">
+    <h2>Release &amp; cycles</h2>
+    <div class="field"><label for="sName">Release (Jira fix version)</label><input id="sName" maxlength="60" required></div>
+    <span class="lbl">Cycles until release end, earliest first</span>
+    <div id="sRows" style="display:flex;flex-direction:column;gap:6px"></div>
+    <button class="btn" type="button" id="addSprint">Add cycle</button>
+    <p class="hint">Removing a cycle moves its milestones back to the Milestones column. Ended cycles are hidden on the board.</p>
+    <p class="err" id="setErr" hidden></p>
+    <div class="foot"><span></span>
+      <div class="g"><button class="btn" type="button" id="cancelSet">Cancel</button><button class="btn primary" type="submit">Save</button></div>
+    </div>
+  </form>
+</dialog>
+
+<script src="vendor/Sortable.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var LS_KEY = "release-board-workingcopy-v1";
+  var NO_SAGA = "Other epics";
+  var $ = function (id) { return document.getElementById(id); };
+  function uid() { return Math.random().toString(36).slice(2, 9); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
+  function fmt(iso) { if (!iso) return ""; var d = new Date(iso + "T00:00:00"); return isNaN(d) ? iso : d.toLocaleDateString(undefined, { day: "numeric", month: "short" }); }
+  function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function safeUrl(u) { return /^https?:\/\//i.test(u || "") ? u : ""; }
+  function keyFrom(u) { var m = /(?:browse\/|selectedIssue=|issues\/)([A-Z][A-Z0-9_]+-\d+)/i.exec(u || "") || /\b([A-Z][A-Z0-9_]+-\d+)\b/.exec(u || ""); return m ? m[1].toUpperCase() : ""; }
+
+  function example() {
+    var sp = [{ id: "s1", name: "Cycle 1", end: "2026-11-06" }, { id: "s2", name: "Cycle 2", end: "2026-11-20" }, { id: "s3", name: "Cycle 3", end: "2026-12-04" }];
+    function m(d, l, c) { return { id: uid(), d: d, label: l || "", col: c }; }
+    function e(saga, key, title, size, ms, flag, reason) { return { id: uid(), saga: saga, key: key, jira: "", title: title, size: size, link: "", flag: !!flag, reason: reason || "", ms: ms || [] }; }
+    return { example: true, release: "Ares release 26_4", sprints: sp, epics: [
+      e("Component verification", "EX-101", "Part master data import", "L", [m("BE","Import API","s1"), m("UX","Mapping screen","s1"), m("FE","Mapping screen","s2")]),
+      e("Component verification", "EX-102", "Verification rules engine", "XL", [m("BE","Rule model","s1"), m("BE","Evaluation","s2"), m("FE","Rule editor","s3"), m("FE","Results view","after")]),
+      e("Component verification", "EX-103", "Component status dashboard", "M", []),
+      e("Release approval", "EX-104", "Approval workflow", "M", [m("UX","Flow","s1"), m("BE","States","s2"), m("FE","Approval screen","s3")], true, "Approval roles not confirmed"),
+      e("Release approval", "EX-105", "Audit trail export", "S", [m("BE","Export","s2"), m("FE","Download","pipe")])
+    ] };
+  }
+  function blank() { return { release: "Next release", sprints: [{ id: uid(), name: "Cycle 1", end: "" }, { id: uid(), name: "Cycle 2", end: "" }, { id: uid(), name: "Cycle 3", end: "" }], epics: [] }; }
+  function norm(s) {
+    (s.sprints || []).forEach(function (x) { x.name = String(x.name || "").replace(/^Sprint(\s*\d+)$/i, "Cycle$1"); });
+    (s.epics || []).forEach(function (e) { if (!e.ms) e.ms = []; if (e.saga == null) e.saga = ""; });
+    return s;
+  }
+
+  var state = example(), mode = "local", canWrite = false, dragging = false;
+  var lastSaved = "", saveTimer = null, saving = false, dirty = false;
+  var composing = null, composeDis = "BE";
+  var view = "prio"; try { view = localStorage.getItem("release-grid-view") || "prio"; } catch (e) {}
+  $("viewSel").addEventListener("change", function () { view = this.value; try { localStorage.setItem("release-grid-view", view); } catch (e) {} render(); });
+
+
+  function cyclesLeft() { var t = today(); return state.sprints.filter(function (s) { return !s.end || s.end >= t; }).length; }
+  function atRisk(e, left) {
+    if (e.flag) return e.reason || "Flagged as release risk";
+    if (e.ms.some(function (m) { return m.col === "after"; })) return "Milestones in Release Risk";
+    if (!e.ms.length && left <= 2) return "Not broken down yet";
+    return "";
+  }
+
+  function upcoming() { var t = today(); return state.sprints.filter(function (s) { return !s.end || s.end >= t; }); }
+  function cols() { return [{ id: "pipe", name: "Milestones", d: "not in a cycle yet" }].concat(upcoming().map(function (s) { return { id: s.id, name: s.name, d: s.end ? "ends " + fmt(s.end) : "" }; })).concat([{ id: "after", name: "Release Risk", d: "won't fit", cls: "risk" }]); }
+  function groups() {
+    var order = [], map = {};
+    state.epics.forEach(function (e) { var s = (e.saga || "").trim() || NO_SAGA; if (!map[s]) { map[s] = []; order.push(s); } map[s].push(e); });
+    var i = order.indexOf(NO_SAGA); if (i > -1) { order.splice(i, 1); order.push(NO_SAGA); }
+    return order.map(function (s) { return { name: s, epics: map[s] }; });
+  }
+
+  function composerHtml() {
+    return '<div class="composer" id="composer"><div class="dis" role="group" aria-label="Discipline">' + ["UX","BE","FE"].map(function (d) {
+      return '<button type="button" class="' + d + '" data-dis="' + d + '" aria-pressed="' + (composeDis === d) + '">' + d + '</button>'; }).join("") + '</div>' +
+      '<input id="compIn" maxlength="40" placeholder="Milestone, e.g. Import API" aria-label="Milestone">' +
+      '<div class="row"><button type="button" class="go" id="compAdd">Add</button><button type="button" id="compDone">Done</button></div></div>';
+  }
+
+  function rowHtml(e, C, left) {
+    var risk = atRisk(e, left), jira = safeUrl(e.jira);
+    var meta = [];
+    if (e.key) meta.push(jira ? '<a href="' + esc(jira) + '" target="_blank" rel="noopener" title="Open in Jira">' + esc(e.key) + ' ↗</a>' : '<span class="key">' + esc(e.key) + '</span>');
+    else if (jira) meta.push('<a href="' + esc(jira) + '" target="_blank" rel="noopener">Jira ↗</a>');
+    meta.push('<span class="size" title="T-shirt size">' + esc(e.size) + '</span>');
+    var nq = String(e.q || "").split(/\n/).filter(function (l) { return l.trim(); }).length;
+    if (nq) meta.push('<span title="Open questions">' + nq + ' open question' + (nq === 1 ? "" : "s") + '</span>');
+    var live = {}; C.forEach(function (c) { live[c.id] = 1; });
+    var past = e.ms.filter(function (m) { return !live[m.col]; }).length;
+    if (past) meta.push('<span title="Milestones in ended cycles">' + past + ' in past cycles</span>');
+    return '<tr class="ep' + (risk ? " at-risk" : "") + (e.ms.length ? "" : " no-ms") + '" data-id="' + esc(e.id) + '"' + (risk ? ' title="' + esc(risk) + '"' : "") + '>' +
+      '<td class="epic"><div class="erow"><span class="handle" title="Drag to change priority">⋮⋮</span><div class="einfo">' +
+      '<button type="button" class="etitle" data-open="' + esc(e.id) + '">' + esc(e.title) + '</button><div class="meta">' + meta.join("") + '</div></div></div></td>' +
+      C.map(function (c, i) {
+        var chips = e.ms.filter(function (m) { return m.col === c.id; }).map(function (m) {
+          return '<span class="chip ' + esc(m.d) + '" data-mid="' + esc(m.id) + '" tabindex="0" title="' + esc(m.d + (m.label ? ": " + m.label : "")) + '">' + esc(m.d) + (m.label ? '<span class="lb">' + esc(m.label) + '</span>' : "") + '</span>';
+        }).join("");
+        var extra = i === 0 ? (composing === e.id ? composerHtml() : '<button type="button" class="addm" data-add="' + esc(e.id) + '">+ Milestone</button>') : "";
+        return '<td class="cell ' + (c.cls || "") + '">' + extra + (c.id === "after" && risk ? '<div class="why">' + esc(risk) + '</div>' : "") + '<div class="drop" data-col="' + esc(c.id) + '">' + chips + '</div></td>';
+      }).join("") + '</tr>';
+  }
+
+  var sortables = [];
+  function render() {
+    $("app").classList.toggle("readonly", !canWrite);
+    ["addBtn","setBtn","saveBtn"].forEach(function (id) { $(id).hidden = !canWrite; });
+    $("editBtn").textContent = canWrite ? "Done editing" : "Edit";
+    $("editBtn").setAttribute("aria-pressed", canWrite);
+    $("editBtn").classList.toggle("editing", canWrite);
+    $("relName").textContent = /^\d/.test(state.release || "") ? "Release " + state.release : (state.release || "Release");
+    var last = state.sprints[state.sprints.length - 1], left = cyclesLeft();
+    $("relSub").textContent = left + " cycle" + (left === 1 ? "" : "s") + " left" + (last && last.end ? " · release end " + fmt(last.end) : "");
+
+    var C = cols();
+    $("ghead").innerHTML = '<tr><th class="epic"><span class="n">Epic</span><span class="d">' + ({ prio: "by priority", risk: "release risk first", only: "release risk only" })[view] + '</span></th>' + C.map(function (c) {
+      return '<th class="' + (c.cls || "") + '"><span class="n">' + esc(c.name) + '</span><span class="d">' + esc(c.d) + '</span></th>'; }).join("") + '</tr>';
+    $("grid").querySelectorAll("tbody").forEach(function (t) { t.remove(); });
+    $("app").classList.toggle("noreorder", view !== "prio");
+    if (!/^(prio|risk|only)$/.test(view)) view = "prio";
+    $("viewSel").value = view;
+    var G = groups(), showSaga = G.length > 1 || (G[0] && G[0].name !== NO_SAGA);
+    var nRisk = state.epics.filter(function (e) { return atRisk(e, left); }).length;
+    $("optOnly").textContent = "Only release risk (" + nRisk + ")";
+    if (view === "risk") G.sort(function (a, b) { var ra = a.epics.some(function (e) { return atRisk(e, left); }) ? 0 : 1, rb = b.epics.some(function (e) { return atRisk(e, left); }) ? 0 : 1; return ra - rb; });
+    var html = G.map(function (g) {
+      var list = g.epics.slice();
+      if (view === "only") list = list.filter(function (e) { return atRisk(e, left); });
+      else if (view === "risk") list.sort(function (a, b) { return (atRisk(a, left) ? 0 : 1) - (atRisk(b, left) ? 0 : 1); });
+      if (!list.length) return "";
+      return '<tbody data-saga="' + esc(g.name) + '">' + (showSaga ? '<tr class="saga"><td colspan="' + (C.length + 1) + '">' + esc(g.name) + '</td></tr>' : "") +
+        list.map(function (e) { return rowHtml(e, C, left); }).join("") + '</tbody>';
+    }).join("") || (state.epics.length && view === "only" ? '<tbody><tr class="empty-filter"><td colspan="' + (C.length + 1) + '">No epics at release risk.</td></tr></tbody>' : "") || '<tbody><tr class="empty-row"><td colspan="' + (C.length + 1) + '">No epics yet.' + (canWrite ? " Add the epics handed over to the team." : "") + '</td></tr></tbody>';
+    $("grid").insertAdjacentHTML("beforeend", html);
+    bind();
+    if (composing) { var ci = $("compIn"); if (ci) ci.focus(); }
+  }
+
+  function bind() {
+    sortables.forEach(function (s) { s.destroy(); }); sortables = [];
+    if (!canWrite || typeof Sortable === "undefined") return;
+    document.querySelectorAll("#grid tr.ep").forEach(function (tr) {
+      var rid = tr.getAttribute("data-id");
+      tr.querySelectorAll(".drop").forEach(function (el) {
+        sortables.push(Sortable.create(el, { group: "row-" + rid, draggable: ".chip", animation: 120, delay: 150, delayOnTouchOnly: true, ghostClass: "sortable-ghost", forceFallback: true, fallbackOnBody: true, emptyInsertThreshold: 40,
+          onStart: function () { dragging = true; }, onEnd: function () { dragging = false; readRow(tr); } }));
+      });
+    });
+    if (view === "prio") document.querySelectorAll("#grid tbody[data-saga]").forEach(function (tb) {
+      sortables.push(Sortable.create(tb, { handle: ".handle", draggable: "tr.ep", animation: 140, ghostClass: "sortable-ghost", forceFallback: true,
+        onStart: function () { dragging = true; },
+        onEnd: function () { dragging = false;
+          var order = Array.prototype.map.call(document.querySelectorAll("#grid tr.ep"), function (t) { return t.getAttribute("data-id"); });
+          state.epics.sort(function (a, b) { return order.indexOf(a.id) - order.indexOf(b.id); }); changed(); render(); } }));
+    });
+  }
+  function readRow(tr) {
+    var e = state.epics.find(function (x) { return x.id === tr.getAttribute("data-id"); }); if (!e) return;
+    var byId = {}; e.ms.forEach(function (m) { byId[m.id] = m; });
+    var shown = {}; tr.querySelectorAll(".chip").forEach(function (c) { shown[c.getAttribute("data-mid")] = 1; });
+    var next = e.ms.filter(function (m) { return !shown[m.id]; });
+    tr.querySelectorAll(".drop").forEach(function (el) {
+      var col = el.getAttribute("data-col");
+      el.querySelectorAll(".chip").forEach(function (c) { var m = byId[c.getAttribute("data-mid")]; if (m) { m.col = col; next.push(m); } });
+    });
+    e.ms = next; changed(); render();
+  }
+  function findEpic(id) { return state.epics.find(function (x) { return x.id === id; }); }
+
+  // inline composer
+  function addFromComposer() {
+    var e = findEpic(composing), inp = $("compIn"); if (!e || !inp) return;
+    var label = inp.value.trim(); if (!label) { inp.focus(); return; }
+    e.ms.push({ id: uid(), d: composeDis, label: label, col: "pipe" }); changed(); render();
+  }
+  $("grid").addEventListener("click", function (ev) {
+    if (ev.target.closest("a")) return;
+    var b;
+    if ((b = ev.target.closest("[data-add]"))) { composing = b.getAttribute("data-add"); render(); return; }
+    if ((b = ev.target.closest("[data-dis]"))) { composeDis = b.getAttribute("data-dis"); document.querySelectorAll("#composer [data-dis]").forEach(function (x) { x.setAttribute("aria-pressed", x === b); }); $("compIn").focus(); return; }
+    if (ev.target.closest("#compAdd")) { addFromComposer(); return; }
+    if (ev.target.closest("#compDone")) { composing = null; render(); return; }
+    if ((b = ev.target.closest("[data-open]"))) { openEpic(b.getAttribute("data-open")); return; }
+    if ((b = ev.target.closest(".chip")) && canWrite) { openChip(b.closest("tr").getAttribute("data-id"), b.getAttribute("data-mid")); }
+  });
+  $("grid").addEventListener("keydown", function (ev) {
+    if (ev.target.id === "compIn") { if (ev.key === "Enter") { ev.preventDefault(); addFromComposer(); } else if (ev.key === "Escape") { composing = null; render(); } return; }
+    if ((ev.key === "Enter" || ev.key === " ") && ev.target.classList.contains("chip")) { ev.preventDefault(); ev.target.click(); }
+  });
+
+  // chip dialog
+  var chipRef = null, chipDelArmed = false;
+  function openChip(eid, mid) {
+    var e = findEpic(eid), m = e && e.ms.find(function (x) { return x.id === mid; }); if (!m) return;
+    chipRef = { e: e, m: m }; chipDelArmed = false; $("cDel").classList.remove("armed"); $("cDel").textContent = "Delete";
+    $("cLabel").value = m.label; $("cDis").value = m.d; $("chipDlg").showModal();
+  }
+  $("chipForm").addEventListener("submit", function (ev) { ev.preventDefault(); if (!chipRef) return; chipRef.m.label = $("cLabel").value.trim(); chipRef.m.d = $("cDis").value; $("chipDlg").close(); changed(); render(); });
+  $("cCancel").onclick = function () { $("chipDlg").close(); };
+  $("cDel").onclick = function () {
+    if (!chipDelArmed) { chipDelArmed = true; this.classList.add("armed"); this.textContent = "Confirm delete"; return; }
+    chipRef.e.ms = chipRef.e.ms.filter(function (x) { return x !== chipRef.m; }); $("chipDlg").close(); changed(); render();
+  };
+
+  // epic dialog
+  var editing = null, delArmed = false;
+  function openEpic(id) {
+    var e = id ? findEpic(id) : null;
+    editing = e ? e.id : null; delArmed = false;
+    $("epicT").textContent = !canWrite ? "Epic" : e ? "Edit epic" : "Add epic";
+    $("fTitle").value = e ? e.title : ""; $("fSize").value = e ? e.size : "M";
+    $("fJira").value = e ? (e.jira || "") : "";
+    pendingKey = e ? e.key || "" : ""; $("jiraHint").textContent = pendingKey ? "Key " + pendingKey : "The key is taken from the link.";
+    $("fSaga").value = e ? e.saga || "" : "";
+    $("sagaList").innerHTML = groups().filter(function (g) { return g.name !== NO_SAGA; }).map(function (g) { return '<option value="' + esc(g.name) + '"></option>'; }).join("");
+    $("fFlag").checked = !!(e && e.flag); $("fReason").value = e ? e.reason || "" : ""; $("fQ").value = e ? e.q || "" : "";
+    $("reasonWrap").hidden = !$("fFlag").checked;
+    $("delBtn").hidden = !e || !canWrite; $("delBtn").classList.remove("armed"); $("delBtn").textContent = "Delete epic";
+    ["fTitle","fSize","fJira","fSaga","fFlag","fReason","fQ"].forEach(function (f) { $(f).disabled = !canWrite; });
+    $("saveEpic").hidden = !canWrite;
+    $("epicDlg").showModal();
+  }
+  $("fFlag").onchange = function () { $("reasonWrap").hidden = !this.checked; };
+  var pendingKey = "";
+  function jiraBase() { for (var i = 0; i < state.epics.length; i++) { var m = /^(https?:\/\/.+?)\/browse\//i.exec(state.epics[i].jira || ""); if (m) return m[1]; } return ""; }
+  function parseJira(text) {
+    var t = String(text || "").replace(/\s+/g, " ").trim(); if (!t) return {};
+    var um = /https?:\/\/\S+/i.exec(t), url = um ? um[0] : "";
+    var rest = url ? t.replace(url, " ") : t;
+    var key = keyFrom(url) || keyFrom(rest);
+    var title = rest;
+    if (key) title = title.replace(new RegExp("\\[?\\b" + key.replace("-", "\\-") + "\\b\\]?", "i"), " ");
+    title = title.replace(/\s+[-\u2013|]\s+(Jira|JIRA)(\b.*)?$/, "").replace(/^[\s:\-\u2013|\u00b7]+|[\s:\-\u2013|]+$/g, "").trim();
+    if (!url && key && jiraBase()) url = jiraBase() + "/browse/" + key;
+    return { url: url, key: key, title: title };
+  }
+  $("fJira").addEventListener("input", function () {
+    var v = this.value.trim();
+    if (!v) { $("jiraHint").textContent = "A link fills in the key. The browser tab title, e.g. [RS-123] Part import - Jira, fills in key and title."; return; }
+    var p = parseJira(v);
+    if (!p.key) { $("jiraHint").textContent = "No Jira key found. Paste the epic's link or its tab title."; return; }
+    pendingKey = p.key;
+    var gotTitle = p.title && !/^https?:\/\//i.test(v);
+    if (gotTitle) { $("fTitle").value = p.title; if (p.url) this.value = p.url; }
+    $("jiraHint").textContent = "Key " + p.key + (gotTitle ? " · title filled in" : ($("fTitle").value.trim() ? "" : " · type the title, or paste the tab title to fill it in")) + (p.url ? "" : " · add one full link once and later keys link automatically");
+  });
+  $("epicForm").addEventListener("submit", function (ev) {
+    ev.preventDefault(); if (!canWrite) return $("epicDlg").close();
+    var title = $("fTitle").value.trim(); if (!title) return;
+    var jira = $("fJira").value.trim();
+    var v = { title: title, size: $("fSize").value, jira: jira, saga: $("fSaga").value.trim(),
+      flag: $("fFlag").checked, reason: $("fFlag").checked ? $("fReason").value.trim() : "", q: $("fQ").value.trim() };
+    var k = keyFrom(jira) || pendingKey;
+    if (editing) { var e = findEpic(editing); Object.assign(e, v); if (k) e.key = k; }
+    else state.epics.push(Object.assign({ id: uid(), key: k, ms: [] }, v));
+    $("epicDlg").close(); changed(); render();
+  });
+  $("cancelEpic").onclick = function () { $("epicDlg").close(); };
+  $("delBtn").onclick = function () {
+    if (!delArmed) { delArmed = true; this.classList.add("armed"); this.textContent = "Confirm delete"; return; }
+    state.epics = state.epics.filter(function (x) { return x.id !== editing; }); $("epicDlg").close(); changed(); render();
+  };
+  $("addBtn").onclick = function () { openEpic(null); };
+
+  // bulk paste
+  var bulkRows = [];
+  function parseBulk(text) {
+    var have = {}; state.epics.forEach(function (e) { if (e.key) have[e.key.toUpperCase()] = 1; });
+    var out = [], seen = {}, dup = 0;
+    String(text || "").split(/\r?\n/).forEach(function (line) {
+      if (!line.trim()) return;
+      var cells = line.split("\t").map(function (c) { return c.trim(); }).filter(Boolean);
+      var key = "", title = "", size = "", url = "";
+      cells.forEach(function (c, i) {
+        if (/^https?:\/\//i.test(c)) { url = url || c; if (!key) key = keyFrom(c); return; }
+        if (!key && /^[A-Z][A-Z0-9_]+-\d+$/i.test(c)) { key = c.toUpperCase(); if (cells[i + 1] && !/^(XS|S|M|L|XL)$/i.test(cells[i + 1])) title = title || cells[i + 1]; return; }
+        if (/^(XS|S|M|L|XL)$/i.test(c)) size = size || c.toUpperCase();
+      });
+      if (!key || (cells.length < 2 && !title)) { var p = parseJira(line); key = key || p.key; title = title || p.title; url = url || p.url; }
+      if (!key) return;
+      if (!url && jiraBase()) url = jiraBase() + "/browse/" + key;
+      if (have[key] || seen[key]) { dup++; return; }
+      seen[key] = 1;
+      out.push({ key: key, title: title || key, size: size || "M", jira: url });
+    });
+    return { rows: out, dup: dup };
+  }
+  $("bulkBtn").onclick = function () {
+    $("bText").value = ""; $("bSaga").value = ""; bulkRows = []; $("bAdd").disabled = true; $("bInfo").textContent = "Nothing pasted yet.";
+    $("sagaList2").innerHTML = groups().filter(function (g) { return g.name !== NO_SAGA; }).map(function (g) { return '<option value="' + esc(g.name) + '"></option>'; }).join("");
+    $("bulkDlg").showModal();
+  };
+  $("bText").addEventListener("input", function () {
+    var r = parseBulk(this.value); bulkRows = r.rows;
+    var noTitle = r.rows.filter(function (x) { return x.title === x.key; }).length;
+    $("bInfo").textContent = r.rows.length ? r.rows.length + " epic" + (r.rows.length === 1 ? "" : "s") + " found" + (r.dup ? " · " + r.dup + " already on the board, skipped" : "") + (noTitle ? " · " + noTitle + " without title (key used)" : "") + ". New epics are added at the bottom with size M unless a size is in the row." : (this.value.trim() ? "No Jira keys found. Each line needs a key like RS-123." : "Nothing pasted yet.");
+    $("bAdd").disabled = !r.rows.length;
+  });
+  $("bCancel").onclick = function () { $("bulkDlg").close(); };
+  $("bulkForm").addEventListener("submit", function (ev) {
+    ev.preventDefault(); if (!canWrite || !bulkRows.length) return;
+    var saga = $("bSaga").value.trim();
+    bulkRows.forEach(function (r) { state.epics.push({ id: uid(), key: r.key, jira: r.jira, title: r.title, size: r.size, saga: saga, link: "", flag: false, reason: "", q: "", ms: [] }); });
+    $("bulkDlg").close(); changed(); render();
+  });
+
+  // cycles dialog
+  var sdraft = [];
+  function sRows() {
+    $("sRows").innerHTML = sdraft.map(function (s, i) {
+      return '<div class="srow" data-i="' + i + '"><input id="sn' + i + '" data-f="name" maxlength="30" value="' + esc(s.name) + '" aria-label="Cycle name">' +
+        '<input id="se' + i + '" data-f="end" type="date" value="' + esc(s.end) + '" aria-label="Cycle end date">' +
+        '<button type="button" data-rm="' + i + '" aria-label="Remove cycle">✕</button></div>';
+    }).join("");
+  }
+  function openSettings() { sdraft = state.sprints.map(function (s) { return Object.assign({}, s); }); $("sName").value = state.release; $("setErr").hidden = true; sRows(); $("setDlg").showModal(); }
+  $("sRows").addEventListener("input", function (ev) { var r = ev.target.closest(".srow"); if (r) sdraft[+r.dataset.i][ev.target.dataset.f] = ev.target.value; });
+  $("sRows").addEventListener("click", function (ev) { var b = ev.target.closest("[data-rm]"); if (b) { sdraft.splice(+b.dataset.rm, 1); sRows(); } });
+  $("addSprint").onclick = function () { sdraft.push({ id: uid(), name: "Cycle " + (sdraft.length + 1), end: "" }); sRows(); };
+  $("cancelSet").onclick = function () { $("setDlg").close(); };
+  $("setForm").addEventListener("submit", function (ev) {
+    ev.preventDefault(); var err = $("setErr");
+    if (!sdraft.length) { err.textContent = "Add at least one cycle."; err.hidden = false; return; }
+    var dated = sdraft.filter(function (s) { return s.end; });
+    for (var i = 1; i < dated.length; i++) if (dated[i].end < dated[i - 1].end) { err.textContent = "Put the cycles in date order, earliest first."; err.hidden = false; return; }
+    var keep = { pipe: 1, after: 1 }; sdraft.forEach(function (s) { keep[s.id] = 1; });
+    state.epics.forEach(function (e) { e.ms.forEach(function (m) { if (!keep[m.col]) m.col = "pipe"; }); });
+    state.sprints = sdraft; state.release = $("sName").value.trim() || "Release";
+    $("setDlg").close(); changed(); render();
+  });
+  $("setBtn").onclick = openSettings;
+
+  // ---------- Excel file storage (data never leaves this computer) ----------
+  var fileHandle = null, fileName = "", unsaved = false;
+  var autoTimer = null;
+  function changed() {
+    if (!canWrite) return;
+    clearTimeout(autoTimer);
+    if (fileHandle) autoTimer = setTimeout(function () { saveExcel(true); }, 800);
+    if (state.example) { delete state.example; hideBanner(); }
+    unsaved = true;
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+    updateFileBar();
+  }
+  function updateFileBar() {
+    $("fileName").textContent = fileName || "No Excel file open";
+    $("saveState").textContent = unsaved ? (fileHandle && canWrite ? "Saving\u2026" : "Unsaved changes") : (fileName ? (lastSavedAt ? "Saved to Excel " + lastSavedAt : "Opened") : "");
+    $("saveState").className = unsaved ? "unsaved" : "";
+    $("saveBtn").classList.toggle("primary", unsaved);
+  }
+  window.addEventListener("beforeunload", function (e) { if (unsaved) { e.preventDefault(); e.returnValue = ""; } });
+
+  function showBanner(text, startEmpty) {
+    var b = $("banner"); b.hidden = false;
+    b.innerHTML = "<span>" + esc(text) + "</span>" + (startEmpty ? '<span style="display:flex;gap:8px"><button class="btn small" type="button" id="bOpen">Open Excel</button><button class="btn small" type="button" id="clearEx">Start empty</button></span>' : "");
+    if (startEmpty) {
+      $("clearEx").onclick = function () { canWrite = true; state = blank(); fileHandle = null; fileName = ""; changed(); hideBanner(); render(); openSettings(); };
+      $("bOpen").onclick = openExcel;
+    }
+  }
+  function hideBanner() { $("banner").hidden = true; }
+
+  var COL_PIPE = "Milestones", COL_RISK = "Release Risk";
+  function toWorkbook(s) {
+    var wb = XLSX.utils.book_new();
+    var cycName = {}; s.sprints.forEach(function (c) { cycName[c.id] = c.name; });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Release", s.release || ""]]), "Release");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Cycle", "End date (YYYY-MM-DD)"]].concat(s.sprints.map(function (c) { return [c.name, c.end || ""]; }))), "Cycles");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["ID (do not change)", "Priority", "Saga", "Key", "Title", "Size", "Jira link", "Release risk flag", "Risk reason", "Open questions"]].concat(
+      s.epics.map(function (e, i) { return [e.id, i + 1, e.saga || "", e.key || "", e.title || "", e.size || "M", e.jira || "", e.flag ? "Yes" : "No", e.reason || "", e.q || ""]; }))), "Epics");
+    var ms = [["Epic ID", "Epic", "Discipline", "Milestone", "Column"]];
+    s.epics.forEach(function (e) { e.ms.forEach(function (m) {
+      ms.push([e.id, e.key || e.title, m.d, m.label || "", m.col === "pipe" ? COL_PIPE : m.col === "after" ? COL_RISK : (cycName[m.col] || COL_PIPE)]); }); });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ms), "Milestones");
+    return wb;
+  }
+  function rows(wb, name) { var ws = wb.Sheets[name]; return ws ? XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }).slice(1) : []; }
+  function fromWorkbook(wb) {
+    if (!wb.Sheets.Epics || !wb.Sheets.Cycles) throw new Error("This Excel has no Epics and Cycles sheets. Open a file saved by this board, or start empty and save a new one.");
+    var relWs = wb.Sheets.Release, release = relWs ? (XLSX.utils.sheet_to_json(relWs, { header: 1, raw: false, defval: "" })[0] || [])[1] || "" : "";
+    var sprints = rows(wb, "Cycles").filter(function (r) { return String(r[0]).trim(); }).map(function (r) {
+      var d = String(r[1] || "").trim(), m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(d), m2 = /^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/.exec(d);
+      if (m) d = m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
+      else if (m2) { var y = m2[3].length === 2 ? "20" + m2[3] : m2[3]; d = y + "-" + m2[2].padStart(2, "0") + "-" + m2[1].padStart(2, "0"); }
+      else d = "";
+      return { id: uid(), name: String(r[0]).trim(), end: d };
+    });
+    var byName = {}; sprints.forEach(function (c) { byName[c.name.toLowerCase()] = c.id; });
+    var epics = rows(wb, "Epics").filter(function (r) { return String(r[4] || r[3]).trim(); }).map(function (r) {
+      return { id: String(r[0]).trim() || uid(), prio: parseFloat(r[1]) || 9999, saga: String(r[2]).trim(), key: String(r[3]).trim(), title: String(r[4]).trim() || String(r[3]).trim(),
+        size: /^(XS|S|M|L|XL)$/i.test(String(r[5]).trim()) ? String(r[5]).trim().toUpperCase() : "M", jira: String(r[6]).trim(),
+        flag: /^(yes|y|true|1|x|da)$/i.test(String(r[7]).trim()), reason: String(r[8]).trim(), q: String(r[9]).trim(), ms: [] };
+    }).sort(function (a, b) { return a.prio - b.prio; });
+    var byId = {}, byKey = {}; epics.forEach(function (e) { delete e.prio; byId[e.id] = e; if (e.key) byKey[e.key.toLowerCase()] = e; byKey[e.title.toLowerCase()] = byKey[e.title.toLowerCase()] || e; });
+    rows(wb, "Milestones").forEach(function (r) {
+      var e = byId[String(r[0]).trim()] || byKey[String(r[1]).trim().toLowerCase()]; if (!e) return;
+      var d = String(r[2]).trim().toUpperCase(); if (!/^(FE|BE|UX)$/.test(d)) return;
+      var col = String(r[4]).trim(), lc = col.toLowerCase();
+      e.ms.push({ id: uid(), d: d, label: String(r[3]).trim(), col: lc === COL_RISK.toLowerCase() ? "after" : (byName[lc] || "pipe") });
+    });
+    return { release: String(release).trim() || "Release", sprints: sprints.length ? sprints : blank().sprints, epics: epics };
+  }
+
+  async function openExcel() {
+    if (unsaved && !window.confirmOpen) { window.confirmOpen = true; showBanner("You have unsaved changes. Click Open Excel again to discard them, or Save first.", false); setTimeout(function () { window.confirmOpen = false; }, 8000); return; }
+    window.confirmOpen = false;
+    try {
+      var file;
+      if (window.showOpenFilePicker) {
+        var hs = await window.showOpenFilePicker({ types: [{ description: "Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+        fileHandle = hs[0]; file = await fileHandle.getFile();
+      } else {
+        file = await new Promise(function (res) { var i = document.createElement("input"); i.type = "file"; i.accept = ".xlsx"; i.onchange = function () { res(i.files[0]); }; i.click(); });
+        fileHandle = null; if (!file) return;
+      }
+      var wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      state = norm(fromWorkbook(wb)); fileName = file.name; unsaved = false;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+      hideBanner(); updateFileBar(); render();
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      showBanner("Couldn't open the file. " + (err && err.message ? err.message : ""), false);
+    }
+  }
+  var lastSavedAt = "";
+  var savingNow = false, saveAgain = false;
+  async function askWrite() {
+    if (!fileHandle || !fileHandle.requestPermission) return true;
+    try { var st = await fileHandle.queryPermission({ mode: "readwrite" }); if (st === "granted") return true; return (await fileHandle.requestPermission({ mode: "readwrite" })) === "granted"; } catch (e) { return false; }
+  }
+  async function saveExcel(auto) {
+    if (auto && !fileHandle) return;
+    if (savingNow) { saveAgain = true; return; }
+    if (!auto && fileHandle && !(await askWrite())) { showBanner("Saving into the file wasn't allowed. Click Save again and choose Allow / Save changes.", false); return; }
+    savingNow = true;
+    var data = XLSX.write(toWorkbook(state), { type: "array", bookType: "xlsx" });
+    try {
+      if (!fileHandle && window.showSaveFilePicker) {
+        fileHandle = await window.showSaveFilePicker({ suggestedName: (fileName || (state.release || "release").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + "-board") .replace(/\.xlsx$/i, "") + ".xlsx",
+          types: [{ description: "Excel", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+      }
+      if (fileHandle) {
+        var w = await fileHandle.createWritable(); await w.write(new Blob([data])); await w.close();
+        fileName = fileHandle.name;
+      } else {
+        fileName = fileName || "release-board.xlsx"; XLSX.writeFile(toWorkbook(state), fileName);
+      }
+      unsaved = false; lastSavedAt = new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); updateFileBar();
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      if (err && err.name === "NotAllowedError") { showBanner("Saving into the file wasn't allowed. Click Save and choose Allow / Save changes.", false); return; }
+      showBanner("Couldn't save. If the file is open in Excel, close it there and click Save.", false);
+    } finally {
+      savingNow = false;
+      if (saveAgain) { saveAgain = false; saveExcel(true); }
+    }
+  }
+  $("openBtn").onclick = openExcel;
+  $("editBtn").onclick = async function () {
+    if (!canWrite && fileHandle && !(await askWrite())) { showBanner("To edit, allow this page to save changes to " + fileName + ".", false); return; }
+    if (canWrite && unsaved && fileHandle) saveExcel(true);
+    canWrite = !canWrite; composing = null;
+    if (canWrite && !fileHandle) showBanner(fileName ? "This browser can't save straight into the file. Click Save when you're done; it downloads an updated copy." : "Open the team's Excel first, so every change saves into it automatically. Without a file, use Save to create one.", false);
+    else if (canWrite) showBanner("Editing. Every change is saved to " + fileName + " automatically.", false);
+    else hideBanner();
+    updateFileBar(); render();
+  };
+  $("saveBtn").onclick = saveExcel;
+  document.addEventListener("keydown", function (e) { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveExcel(); } });
+
+  function valid(s) { return s && Array.isArray(s.sprints) && Array.isArray(s.epics); }
+
+  (function boot() {
+    var s = null;
+    try { s = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
+    if (valid(s) && !s.example) { state = norm(s); unsaved = true; showBanner("Restored your last unsaved board from this browser. Open Excel to load the saved file instead.", false); }
+    else showBanner("Example data. Open your team's Excel, or start empty and save a new one.", true);
+    updateFileBar(); render();
+  })();
+})();
+</script>
+
+</body>
+</html>
