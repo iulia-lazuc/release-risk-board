@@ -17,6 +17,15 @@ The board stores **nothing on a server**. It runs in your browser and reads/writ
 
 The hosting (Vercel / GitHub Pages) only delivers this page's code. Epic data never leaves your computer.
 
+## Publish for team (no Excel step for viewers)
+- In **Edit** mode, click **Publish for team** once and save `board-data.js` in the **same folder as `index.html`** (the folder your team opens the board from).
+- From then on, every change you make also updates `board-data.js` automatically. Anyone opening the board sees the published plan ("Published plan · as of 20 Oct, 10:42") without opening Excel.
+- The Excel stays the master copy; `board-data.js` is a read-only copy of it for viewers.
+- `board-data.js` contains project data. It is listed in `.gitignore` so it is never pushed by accident. If the team opens the board via an internal GitHub Pages site, add it on purpose with `git add -f board-data.js` and push **only to the internal repository**.
+
+## Reconnect
+The board remembers the last Excel file in this browser. When you open the board, click **Reconnect to <file>.xlsx** to continue editing in one click.
+
 ## Excel layout
 | Sheet | Columns |
 |---|---|

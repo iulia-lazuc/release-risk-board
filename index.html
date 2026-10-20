@@ -65,6 +65,8 @@ tr.ep.at-risk td.epic::before { content: ""; position: absolute; left: 0; top: 8
 tr.ep:hover .handle, .handle:focus-visible { opacity: 1; }
 .readonly .handle, .noreorder .handle { display: none; }
 .btn.editing { color: var(--risk) !important; font-weight: 600; }
+.linkbtn { border: 0; background: none; padding: 0 0 0 6px; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.filebar #pubState { color: var(--muted); }
 .filebar { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .filebar #fileName { font-family: var(--f-mono); }
 .filebar .unsaved { color: var(--risk); font-weight: 600; }
@@ -138,7 +140,7 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
     <div>
       <h1 id="relName">Release</h1>
       <div class="sub" id="relSub"></div>
-      <div class="filebar"><span id="fileName"></span> <span id="saveState"></span></div>
+      <div class="filebar"><span id="fileName"></span> <span id="saveState"></span> <span id="pubState"></span> <button type="button" class="linkbtn" id="reconnectBtn" hidden></button></div>
       <div class="viewbar"><label for="viewSel">Show</label>
         <select id="viewSel">
           <option value="prio">By priority</option>
@@ -151,6 +153,7 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
       <button class="btn" type="button" id="openBtn">Open Excel</button>
       <button class="btn" type="button" id="editBtn" aria-pressed="false">Edit</button>
       <button class="btn" type="button" id="saveBtn" title="Ctrl+S">Save</button>
+      <button class="btn" type="button" id="pubBtn" title="Saves board-data.js so everyone who opens the board sees this plan">Publish for team</button>
       <button class="btn primary" type="button" id="addBtn">Add epic</button>
       <button class="btn" type="button" id="bulkBtn" hidden>Paste epics</button>
       <button class="btn" type="button" id="setBtn">Cycles</button>
@@ -225,6 +228,7 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
 
 <script src="vendor/Sortable.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
+<script src="board-data.js"></script>
 <script>
 (function () {
   "use strict";
@@ -314,7 +318,7 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
   var sortables = [];
   function render() {
     $("app").classList.toggle("readonly", !canWrite);
-    ["addBtn","setBtn","saveBtn"].forEach(function (id) { $(id).hidden = !canWrite; });
+    ["addBtn","setBtn","saveBtn","pubBtn"].forEach(function (id) { $(id).hidden = !canWrite; });
     $("editBtn").textContent = canWrite ? "Done editing" : "Edit";
     $("editBtn").setAttribute("aria-pressed", canWrite);
     $("editBtn").classList.toggle("editing", canWrite);
@@ -542,6 +546,7 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
 
   // ---------- Excel file storage (data never leaves this computer) ----------
   var fileHandle = null, fileName = "", unsaved = false;
+  var viewing = "", snapshotAt = "", snapHandle = null, lastPublishedAt = "";
   var autoTimer = null;
   function changed() {
     if (!canWrite) return;
@@ -553,7 +558,8 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
     updateFileBar();
   }
   function updateFileBar() {
-    $("fileName").textContent = fileName || "No Excel file open";
+    $("fileName").textContent = fileName || (viewing === "snapshot" ? "Published plan" : viewing === "local" ? "Your last session (not linked to an Excel file)" : "No Excel file open");
+    $("pubState").textContent = lastPublishedAt ? "\u00b7 Published for team " + lastPublishedAt : (!fileName && viewing === "snapshot" && snapshotAt ? "\u00b7 " + snapshotAt : "");
     $("saveState").textContent = unsaved ? (fileHandle && canWrite ? "Saving\u2026" : "Unsaved changes") : (fileName ? (lastSavedAt ? "Saved to Excel " + lastSavedAt : "Opened") : "");
     $("saveState").className = unsaved ? "unsaved" : "";
     $("saveBtn").classList.toggle("primary", unsaved);
@@ -624,7 +630,8 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
         fileHandle = null; if (!file) return;
       }
       var wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
-      state = norm(fromWorkbook(wb)); fileName = file.name; unsaved = false;
+      state = norm(fromWorkbook(wb)); fileName = file.name; unsaved = false; viewing = "file"; $("reconnectBtn").hidden = true;
+      if (fileHandle) idbSet("excel", fileHandle);
       try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
       hideBanner(); updateFileBar(); render();
     } catch (err) {
@@ -651,11 +658,12 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
       }
       if (fileHandle) {
         var w = await fileHandle.createWritable(); await w.write(new Blob([data])); await w.close();
-        fileName = fileHandle.name;
+        fileName = fileHandle.name; viewing = "file"; idbSet("excel", fileHandle);
       } else {
         fileName = fileName || "release-board.xlsx"; XLSX.writeFile(toWorkbook(state), fileName);
       }
-      unsaved = false; lastSavedAt = new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); updateFileBar();
+      unsaved = false; lastSavedAt = nowLabel(); updateFileBar();
+      if (snapHandle) publish(true);
     } catch (err) {
       if (err && err.name === "AbortError") return;
       if (err && err.name === "NotAllowedError") { showBanner("Saving into the file wasn't allowed. Click Save and choose Allow / Save changes.", false); return; }
@@ -665,10 +673,69 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
       if (saveAgain) { saveAgain = false; saveExcel(true); }
     }
   }
+  // ---------- remember files between visits (this browser only) ----------
+  function idb() { return new Promise(function (res, rej) { var r = indexedDB.open("release-board", 1); r.onupgradeneeded = function () { r.result.createObjectStore("h"); }; r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; }); }
+  async function idbSet(k, v) { try { var d = await idb(); d.transaction("h", "readwrite").objectStore("h").put(v, k); } catch (e) {} }
+  async function idbGet(k) { try { var d = await idb(); return await new Promise(function (res) { var q = d.transaction("h").objectStore("h").get(k); q.onsuccess = function () { res(q.result || null); }; q.onerror = function () { res(null); }; }); } catch (e) { return null; } }
+  async function perm(h, ask) {
+    if (!h || !h.queryPermission) return false;
+    try { if ((await h.queryPermission({ mode: "readwrite" })) === "granted") return true; return ask ? (await h.requestPermission({ mode: "readwrite" })) === "granted" : false; } catch (e) { return false; }
+  }
+  function nowLabel() { return new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
+
+  // ---------- publish for team: board-data.js next to index.html ----------
+  function snapshotText() {
+    var data = JSON.parse(JSON.stringify(state)); delete data.example;
+    return "/* Release Risk Board: published plan. Generated by the board, do not edit by hand. */\nwindow.BOARD_SNAPSHOT = " + JSON.stringify({ publishedAt: new Date().toISOString(), data: data }) + ";\n";
+  }
+  async function publish(auto) {
+    var text = snapshotText();
+    try {
+      if (!snapHandle) {
+        if (auto) return;
+        if (window.showSaveFilePicker) {
+          snapHandle = await window.showSaveFilePicker({ suggestedName: "board-data.js", types: [{ description: "Board data", accept: { "text/javascript": [".js"] } }] });
+          if (snapHandle.name !== "board-data.js") showBanner("Saved as " + snapHandle.name + ". The board only reads a file named board-data.js; save it again with that name.", false);
+          idbSet("snap", snapHandle);
+        } else {
+          var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/javascript" })); a.download = "board-data.js"; a.click();
+          lastPublishedAt = nowLabel(); updateFileBar(); return;
+        }
+      }
+      if (!(await perm(snapHandle, !auto))) { if (!auto) showBanner("Publishing wasn't allowed. Click Publish for team again and choose Allow.", false); return; }
+      var w = await snapHandle.createWritable(); await w.write(new Blob([text], { type: "text/javascript" })); await w.close();
+      lastPublishedAt = nowLabel(); updateFileBar();
+      if (!auto) showBanner("Published. Everyone who opens the board from the same folder now sees this plan. While you edit, it updates automatically.", false);
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      if (!auto) showBanner("Couldn't publish. Try again, or save board-data.js to another folder.", false);
+    }
+  }
+  $("pubBtn").onclick = function () { publish(false); };
+
+  async function loadFromHandle(h) {
+    var file = await h.getFile();
+    state = norm(fromWorkbook(XLSX.read(await file.arrayBuffer(), { type: "array" })));
+    fileHandle = h; fileName = file.name; unsaved = false; viewing = "file";
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  $("reconnectBtn").onclick = async function () {
+    var h = await idbGet("excel"); if (!h) return;
+    if (!(await perm(h, true))) { showBanner("Access to " + h.name + " wasn't allowed. Click Reconnect again and choose Allow, or use Open Excel.", false); return; }
+    try {
+      await loadFromHandle(h);
+      if (snapHandle) await perm(snapHandle, true);
+      canWrite = true; $("reconnectBtn").hidden = true;
+      showBanner("Editing. Every change is saved to " + fileName + " automatically" + (snapHandle ? " and published for the team." : "."), false);
+      updateFileBar(); render();
+    } catch (err) { showBanner("Couldn't open " + h.name + ". It may have been moved or renamed. Use Open Excel.", false); }
+  };
+
   $("openBtn").onclick = openExcel;
   $("editBtn").onclick = async function () {
     if (!canWrite && fileHandle && !(await askWrite())) { showBanner("To edit, allow this page to save changes to " + fileName + ".", false); return; }
     if (canWrite && unsaved && fileHandle) saveExcel(true);
+    if (!canWrite && snapHandle) await perm(snapHandle, true);
     canWrite = !canWrite; composing = null;
     if (canWrite && !fileHandle) showBanner(fileName ? "This browser can't save straight into the file. Click Save when you're done; it downloads an updated copy." : "Open the team's Excel first, so every change saves into it automatically. Without a file, use Save to create one.", false);
     else if (canWrite) showBanner("Editing. Every change is saved to " + fileName + " automatically.", false);
@@ -681,11 +748,20 @@ dialog::backdrop { background: rgba(10,15,25,.45); }
   function valid(s) { return s && Array.isArray(s.sprints) && Array.isArray(s.epics); }
 
   (function boot() {
-    var s = null;
+    var snap = window.BOARD_SNAPSHOT, s = null;
     try { s = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
-    if (valid(s) && !s.example) { state = norm(s); unsaved = true; showBanner("Restored your last unsaved board from this browser. Open Excel to load the saved file instead.", false); }
+    if (snap && valid(snap.data)) {
+      state = norm(JSON.parse(JSON.stringify(snap.data))); viewing = "snapshot";
+      var d = new Date(snap.publishedAt);
+      snapshotAt = isNaN(d) ? "" : "as of " + d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + ", " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    } else if (valid(s) && !s.example) { state = norm(s); viewing = "local"; }
     else showBanner("Example data. Open your team's Excel, or start empty and save a new one.", true);
     updateFileBar(); render();
+    (async function () {
+      snapHandle = await idbGet("snap");
+      var h = await idbGet("excel");
+      if (h && window.showOpenFilePicker) { var r = $("reconnectBtn"); r.textContent = "Reconnect to " + h.name; r.hidden = false; }
+    })();
   })();
 })();
 </script>
