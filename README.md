@@ -39,3 +39,7 @@ You can edit the file in Excel too; the board reads it back.
 ## Files
 - `index.html` – the whole board
 - `vendor/` – bundled libraries (SortableJS for drag and drop, SheetJS for Excel), so nothing loads from external sites
+
+## Epic breakdown tracker (`tracker.html`)
+A personal tracker for the BA breakdown work: one row per epic, grouped by saga, with the breakdown status per discipline (UX, BE, FE): To do → In discussion → Drafted → In backlog (or Not needed). An epic is **ready** when every needed discipline has its user stories in the backlog. The header shows progress against the deadline.
+Data stays in the browser on this computer; **Save to Excel** makes a backup, **Open Excel** restores it.

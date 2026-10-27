@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style>
+<title>Epic Breakdown Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: goal header with progress, then one table — rows = epics by saga, columns = UX | BE | FE breakdown status + next step */
+:root {
+  --paper: #f4f6f9; --panel: #ffffff; --ink: #16202e; --muted: #66748a; --line: #e1e6ee; --line-strong: #c9d1dd;
+  --accent: #1f4fd1; --ok: #1d7a4d; --ok-soft: #e3f4ea; --warn: #9a5b00; --warn-soft: #fff3dc;
+  --prog: #2f55c8; --prog-soft: #e7edff; --risk: #c2362b;
+  --f-display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0f141c; --panel: #161d28; --ink: #e6ebf2; --muted: #93a1b4; --line: #253041; --line-strong: #34415a;
+  --accent: #7d9dff; --ok: #4cc28a; --ok-soft: #14301f; --warn: #f0a83a; --warn-soft: #382a12;
+  --prog: #8fa9ff; --prog-soft: #1b2645; --risk: #ff7a6e; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0f141c; --panel: #161d28; --ink: #e6ebf2; --muted: #93a1b4; --line: #253041; --line-strong: #34415a;
+  --accent: #7d9dff; --ok: #4cc28a; --ok-soft: #14301f; --warn: #f0a83a; --warn-soft: #382a12;
+  --prog: #8fa9ff; --prog-soft: #1b2645; --risk: #ff7a6e; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(26px, 4vw, 34px); line-height: 1.05; margin: 0; }
+.sub { color: var(--muted); font-size: 13.5px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.sub b { color: var(--ink); font-weight: 600; }
+.sub .late { color: var(--risk); font-weight: 600; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; padding: 7px 12px; font-weight: 500; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--ink); background: var(--panel); }
+.btn.danger.armed { background: var(--risk); border-color: var(--risk); color: var(--panel); }
+.banner { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+
+.goal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 12px 24px; align-items: end; }
+@media (max-width: 720px) { .goal { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .goal .main { grid-column: 1 / -1; } }
+.goal .lbl { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.goal .big { font-family: var(--f-display); font-weight: 700; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.goal .big small { font-family: var(--f-body); font-size: 13px; font-weight: 400; color: var(--muted); }
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; display: flex; margin-top: 6px; }
+.bar i { display: block; height: 100%; }
+
+.tools { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; color: var(--muted); }
+.tools select { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; padding: 5px 8px; color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 820px; }
+th, td { text-align: left; vertical-align: middle; }
+thead th { padding: 12px 10px; border-bottom: 1px solid var(--line-strong); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+thead th.c { text-align: center; width: 13%; }
+thead th.epic { padding-left: 20px; width: 34%; }
+tr.saga td { padding: 18px 20px 6px; font-family: var(--f-display); font-weight: 700; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line-strong); }
+tr.saga td span { font-family: var(--f-body); font-weight: 400; letter-spacing: 0; text-transform: none; margin-left: 8px; }
+tbody tr.ep > td { border-bottom: 1px solid var(--line); padding: 10px; }
+tbody tr.ep > td.epic { padding-left: 20px; position: relative; }
+tr.ep.ready td.epic::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--ok); }
+td.c { text-align: center; }
+.etitle { font-weight: 600; background: none; border: 0; padding: 0; text-align: left; overflow-wrap: anywhere; line-height: 1.35; }
+.etitle:hover { color: var(--accent); }
+.meta { font-size: 12px; color: var(--muted); font-family: var(--f-mono); }
+.meta a { color: var(--muted); text-decoration: none; }
+.meta a:hover { color: var(--accent); text-decoration: underline; }
+.next { font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+.next.none { color: var(--muted); font-style: italic; }
+
+.st { border: 1px solid transparent; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; min-width: 104px; }
+.st.todo { background: transparent; border-color: var(--line-strong); color: var(--muted); }
+.st.disc { background: var(--warn-soft); color: var(--warn); }
+.st.draft { background: var(--prog-soft); color: var(--prog); }
+.st.done { background: var(--ok-soft); color: var(--ok); }
+.st.na { background: transparent; color: var(--muted); border: 1px dashed var(--line-strong); font-weight: 400; }
+.legend .st { min-width: 0; cursor: default; }
+.pill { font-size: 12px; font-weight: 600; }
+.pill.ok { color: var(--ok); }
+.pill.no { color: var(--muted); }
+.empty td { padding: 32px; text-align: center; color: var(--muted); }
+
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 0; width: min(480px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(10,15,25,.45); }
+.dlg { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.dlg h2 { font-family: var(--f-display); font-weight: 700; font-size: 22px; margin: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label, .lbl2 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.field input, .field select, .field textarea { border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 9px; background: var(--paper); width: 100%; min-width: 0; }
+.field textarea { resize: vertical; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+.row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.foot .g { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="title">Epic breakdown</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" type="button" id="addBtn">Add epic</button>
+      <button class="btn ghost" type="button" id="setBtn">Goal</button>
+      <button class="btn ghost" type="button" id="expBtn" title="Backup or move to another computer">Save to Excel</button>
+      <button class="btn ghost" type="button" id="impBtn">Open Excel</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="goal" id="goal" aria-label="Progress"></section>
+
+  <div class="tools">
+    <label for="viewSel">Show</label>
+    <select id="viewSel"><option value="all">All epics</option><option value="open">Not ready yet</option><option value="ready">Ready</option></select>
+    <span>Click a status to move it forward.</span>
+    <div class="legend" aria-hidden="true">
+      <span class="st todo">To do</span><span class="st disc">In discussion</span><span class="st draft">Drafted</span><span class="st done">In backlog</span><span class="st na">Not needed</span>
+    </div>
+  </div>
+
+  <div class="scroll"><table id="grid">
+    <thead><tr><th class="epic">Epic</th><th class="c">UX</th><th class="c">BE</th><th class="c">FE</th><th>Next step</th><th class="c" style="width:9%">Ready</th></tr></thead>
+    <tbody id="body"></tbody>
+  </table></div>
+  <p class="hint">Data stays in this browser on this computer. Use “Save to Excel” for a backup or to move it.</p>
+</div>
+
+<dialog id="epicDlg">
+  <form class="dlg" id="epicForm">
+    <h2 id="epicT">Epic</h2>
+    <div class="field"><label for="fTitle">Title</label><input id="fTitle" maxlength="140" required></div>
+    <div class="field"><label for="fJira">Jira link</label><input id="fJira" maxlength="400" placeholder="Paste the epic's Jira link or tab title"><span class="hint" id="jiraHint">The key is taken from the link.</span></div>
+    <div class="field"><label for="fSaga">Saga</label><input id="fSaga" maxlength="80" list="sagaList" required><datalist id="sagaList"></datalist></div>
+    <span class="lbl2">Breakdown status</span>
+    <div class="row3">
+      <div class="field"><label for="fUX">UX</label><select id="fUX"></select></div>
+      <div class="field"><label for="fBE">BE</label><select id="fBE"></select></div>
+      <div class="field"><label for="fFE">FE</label><select id="fFE"></select></div>
+    </div>
+    <div class="field"><label for="fNext">Next step</label><input id="fNext" maxlength="160" placeholder="e.g. Breakdown session with BE on Tue"></div>
+    <div class="field"><label for="fNotes">Notes / open questions</label><textarea id="fNotes" rows="3" maxlength="2000"></textarea></div>
+    <div class="foot">
+      <div class="g"><button class="btn danger" type="button" id="delBtn">Delete</button></div>
+      <div class="g"><button class="btn" type="button" id="cancelBtn">Cancel</button><button class="btn primary" type="submit">Save</button></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="setDlg">
+  <form class="dlg" id="setForm">
+    <h2>Goal</h2>
+    <div class="field"><label for="sTitle">Title</label><input id="sTitle" maxlength="80" required></div>
+    <div class="field"><label for="sDeadline">Deadline: user stories in backlog</label><input id="sDeadline" type="date" required></div>
+    <div class="foot"><span></span><div class="g"><button class="btn" type="button" id="sCancel">Cancel</button><button class="btn primary" type="submit">Save</button></div></div>
+  </form>
+</dialog>
+
+<script src="vendor/xlsx.full.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var LS = "ba-epic-tracker-v1";
+  var D = ["UX", "BE", "FE"];
+  var ST = ["todo", "disc", "draft", "done", "na"];
+  var LBL = { todo: "To do", disc: "In discussion", draft: "Drafted", done: "In backlog", na: "Not needed" };
+  var $ = function (id) { return document.getElementById(id); };
+  function uid() { return Math.random().toString(36).slice(2, 9); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
+  function safeUrl(u) { return /^https?:\/\//i.test(u || "") ? u : ""; }
+  function keyFrom(u) { var m = /(?:browse\/|selectedIssue=)([A-Z][A-Z0-9_]+-\d+)/i.exec(u || "") || /\b([A-Z][A-Z0-9_]+-\d+)\b/.exec(u || ""); return m ? m[1].toUpperCase() : ""; }
+  function fmt(iso) { var d = new Date(iso + "T00:00:00"); return isNaN(d) ? iso : d.toLocaleDateString(undefined, { day: "numeric", month: "short" }); }
+
+  function example() {
+    function e(saga, key, title, ux, be, fe, next) { return { id: uid(), saga: saga, key: key, jira: "", title: title, s: { UX: ux, BE: be, FE: fe }, next: next || "", notes: "" }; }
+    return { example: true, title: "Epic breakdown 26_4", deadline: "2026-11-30", epics: [
+      e("Saga A (example)", "EX-1", "Example: rule configuration", "done", "done", "draft", "Write FE stories for the results view"),
+      e("Saga A (example)", "EX-2", "Example: equipment setup", "done", "draft", "todo", "BE breakdown session on Thursday"),
+      e("Saga A (example)", "EX-3", "Example: execution phase", "disc", "todo", "todo", "Clarify the flow with UX"),
+      e("Saga B (example)", "EX-4", "Example: order creation", "na", "done", "done", ""),
+      e("Saga B (example)", "EX-5", "Example: order status overview", "draft", "todo", "todo", "Review the UX draft with stakeholders")
+    ] };
+  }
+  function blank() { return { title: "Epic breakdown 26_4", deadline: "2026-11-30", epics: [] }; }
+
+  var state = null;
+  try { state = JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) {}
+  if (!state || !Array.isArray(state.epics)) state = example();
+  var view = "all"; try { view = localStorage.getItem(LS + "-view") || "all"; } catch (e) {}
+
+  function save() { if (state.example) { delete state.example; hideBanner(); } try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
+  function showBanner(t, startEmpty) {
+    var b = $("banner"); b.hidden = false;
+    b.innerHTML = "<span>" + esc(t) + "</span>" + (startEmpty ? '<button class="btn" type="button" id="clearEx">Start empty</button>' : "");
+    if (startEmpty) $("clearEx").onclick = function () { state = blank(); save(); hideBanner(); render(); };
+  }
+  function hideBanner() { $("banner").hidden = true; }
+
+  function isReady(e) { var any = false; for (var i = 0; i < D.length; i++) { var s = e.s[D[i]]; if (s === "done") any = true; else if (s !== "na") return false; } return any; }
+  function sagas() { var o = [], seen = {}; state.epics.forEach(function (e) { var s = e.saga || "Other"; if (!seen[s]) { seen[s] = 1; o.push(s); } }); return o; }
+
+  function render() {
+    $("title").textContent = state.title || "Epic breakdown";
+    var days = Math.ceil((new Date(state.deadline + "T23:59:59") - new Date()) / 86400000);
+    var total = state.epics.length, ready = state.epics.filter(isReady).length;
+    $("sub").innerHTML = "Goal: user stories in backlog for every epic by <b>" + esc(fmt(state.deadline)) + "</b> · " +
+      (days >= 0 ? "<b>" + days + "</b> day" + (days === 1 ? "" : "s") + " left" : '<span class="late">' + (-days) + " days overdue</span>");
+
+    var g = '<div class="main"><div class="lbl">Epics ready</div><div class="big">' + ready + ' <small>of ' + total + ' · ' + (total ? Math.round(ready / total * 100) : 0) + '%</small></div>' +
+      '<div class="bar"><i style="width:' + (total ? ready / total * 100 : 0) + '%;background:var(--ok)"></i></div></div>';
+    D.forEach(function (d) {
+      var need = state.epics.filter(function (e) { return e.s[d] !== "na"; }), done = need.filter(function (e) { return e.s[d] === "done"; }).length,
+          draft = need.filter(function (e) { return e.s[d] === "draft"; }).length, disc = need.filter(function (e) { return e.s[d] === "disc"; }).length, n = need.length || 1;
+      g += '<div><div class="lbl">' + d + ' stories in backlog</div><div class="big">' + done + ' <small>of ' + need.length + '</small></div>' +
+        '<div class="bar"><i style="width:' + done / n * 100 + '%;background:var(--ok)"></i><i style="width:' + draft / n * 100 + '%;background:var(--prog)"></i><i style="width:' + disc / n * 100 + '%;background:var(--warn)"></i></div></div>';
+    });
+    $("goal").innerHTML = g;
+    $("viewSel").value = view;
+
+    var html = sagas().map(function (sg) {
+      var all = state.epics.filter(function (e) { return (e.saga || "Other") === sg; });
+      var list = all.filter(function (e) { return view === "all" || (view === "ready" ? isReady(e) : !isReady(e)); });
+      if (!list.length) return "";
+      var r = all.filter(isReady).length;
+      return '<tr class="saga"><td colspan="6">' + esc(sg) + '<span>' + r + ' of ' + all.length + ' ready</span></td></tr>' + list.map(function (e) {
+        var jira = safeUrl(e.jira), rd = isReady(e);
+        return '<tr class="ep' + (rd ? " ready" : "") + '" data-id="' + esc(e.id) + '"><td class="epic"><button type="button" class="etitle" data-open="' + esc(e.id) + '">' + esc(e.title) + '</button>' +
+          '<div class="meta">' + (e.key ? (jira ? '<a href="' + esc(jira) + '" target="_blank" rel="noopener">' + esc(e.key) + ' ↗</a>' : esc(e.key)) : "") + (e.notes ? (e.key ? " · " : "") + "notes" : "") + '</div></td>' +
+          D.map(function (d) { var s = e.s[d] || "todo"; return '<td class="c"><button type="button" class="st ' + s + '" data-cycle="' + d + '" title="' + d + ': ' + LBL[s] + ' (click to move forward)">' + LBL[s] + '</button></td>'; }).join("") +
+          '<td><div class="next' + (e.next ? "" : " none") + '">' + esc(e.next || "No next step") + '</div></td>' +
+          '<td class="c"><span class="pill ' + (rd ? "ok" : "no") + '">' + (rd ? "✓ Ready" : "Not yet") + '</span></td></tr>';
+      }).join("");
+    }).join("");
+    $("body").innerHTML = html || '<tr class="empty"><td colspan="6">' + (total ? "Nothing in this view." : "No epics yet. Add the epics planned for this release.") + '</td></tr>';
+  }
+
+  $("body").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-cycle]");
+    if (b) {
+      var e = state.epics.find(function (x) { return x.id === b.closest("tr").dataset.id; }); if (!e) return;
+      var d = b.dataset.cycle, i = ST.indexOf(e.s[d] || "todo"); e.s[d] = ST[(i + 1) % ST.length];
+      save(); render(); var nb = document.querySelector('tr[data-id="' + e.id + '"] [data-cycle="' + d + '"]'); if (nb) nb.focus(); return;
+    }
+    var o = ev.target.closest("[data-open]"); if (o) openEpic(o.dataset.open);
+  });
+  $("viewSel").onchange = function () { view = this.value; try { localStorage.setItem(LS + "-view", view); } catch (e) {} render(); };
+
+  // epic dialog
+  var editing = null, delArmed = false;
+  ["fUX", "fBE", "fFE"].forEach(function (id) { $(id).innerHTML = ST.map(function (s) { return '<option value="' + s + '">' + LBL[s] + '</option>'; }).join(""); });
+  function openEpic(id) {
+    var e = id ? state.epics.find(function (x) { return x.id === id; }) : null; editing = e ? e.id : null; delArmed = false;
+    $("epicT").textContent = e ? "Edit epic" : "Add epic";
+    $("fTitle").value = e ? e.title : ""; $("fJira").value = e ? e.jira || "" : ""; $("fSaga").value = e ? e.saga : (sagas()[0] || "");
+    $("fUX").value = e ? e.s.UX : "todo"; $("fBE").value = e ? e.s.BE : "todo"; $("fFE").value = e ? e.s.FE : "todo";
+    $("fNext").value = e ? e.next || "" : ""; $("fNotes").value = e ? e.notes || "" : "";
+    $("jiraHint").textContent = e && e.key ? "Key " + e.key : "The key is taken from the link.";
+    $("sagaList").innerHTML = sagas().map(function (s) { return '<option value="' + esc(s) + '"></option>'; }).join("");
+    $("delBtn").hidden = !e; $("delBtn").classList.remove("armed"); $("delBtn").textContent = "Delete";
+    $("epicDlg").showModal();
+  }
+  $("fJira").addEventListener("input", function () {
+    var v = this.value.trim(), k = keyFrom(v);
+    if (k && !/^https?:\/\//i.test(v)) { var t = v.replace(/\s+[-–|]\s+Jira.*$/i, "").replace(new RegExp("\\[?" + k + "\\]?", "i"), "").replace(/^[\s:–-]+/, "").trim(); if (t) $("fTitle").value = t; }
+    $("jiraHint").textContent = k ? "Key " + k : (v ? "No Jira key found." : "The key is taken from the link.");
+  });
+  $("epicForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var t = $("fTitle").value.trim(); if (!t) return;
+    var jira = $("fJira").value.trim();
+    var v = { title: t, jira: /^https?:\/\//i.test(jira) ? jira : "", saga: $("fSaga").value.trim() || "Other", s: { UX: $("fUX").value, BE: $("fBE").value, FE: $("fFE").value },
+      next: $("fNext").value.trim(), notes: $("fNotes").value.trim() };
+    var k = keyFrom(jira);
+    if (editing) { var e = state.epics.find(function (x) { return x.id === editing; }); Object.assign(e, v); if (k) e.key = k; }
+    else state.epics.push(Object.assign({ id: uid(), key: k }, v));
+    save(); $("epicDlg").close(); render();
+  });
+  $("cancelBtn").onclick = function () { $("epicDlg").close(); };
+  $("delBtn").onclick = function () {
+    if (!delArmed) { delArmed = true; this.classList.add("armed"); this.textContent = "Confirm delete"; return; }
+    state.epics = state.epics.filter(function (x) { return x.id !== editing; }); save(); $("epicDlg").close(); render();
+  };
+  $("addBtn").onclick = function () { openEpic(null); };
+
+  // goal dialog
+  $("setBtn").onclick = function () { $("sTitle").value = state.title; $("sDeadline").value = state.deadline; $("setDlg").showModal(); };
+  $("sCancel").onclick = function () { $("setDlg").close(); };
+  $("setForm").addEventListener("submit", function (ev) { ev.preventDefault(); state.title = $("sTitle").value.trim() || "Epic breakdown"; state.deadline = $("sDeadline").value || state.deadline; save(); $("setDlg").close(); render(); });
+
+  // Excel backup
+  var COLS = ["Saga", "Key", "Title", "Jira link", "UX", "BE", "FE", "Next step", "Notes"];
+  var REV = {}; ST.forEach(function (s) { REV[LBL[s].toLowerCase()] = s; });
+  $("expBtn").onclick = function () {
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Title", state.title], ["Deadline (YYYY-MM-DD)", state.deadline]]), "Goal");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([COLS].concat(state.epics.map(function (e) {
+      return [e.saga, e.key || "", e.title, e.jira || "", LBL[e.s.UX], LBL[e.s.BE], LBL[e.s.FE], e.next || "", e.notes || ""]; }))), "Epics");
+    XLSX.writeFile(wb, "epic-breakdown-tracker.xlsx");
+  };
+  $("impBtn").onclick = function () {
+    var i = document.createElement("input"); i.type = "file"; i.accept = ".xlsx";
+    i.onchange = async function () {
+      try {
+        var wb = XLSX.read(await i.files[0].arrayBuffer(), { type: "array" });
+        if (!wb.Sheets.Epics) throw new Error("No 'Epics' sheet found. Open a file saved by this tracker.");
+        var rows = XLSX.utils.sheet_to_json(wb.Sheets.Epics, { header: 1, raw: false, defval: "" }).slice(1).filter(function (r) { return String(r[2]).trim(); });
+        var goal = wb.Sheets.Goal ? XLSX.utils.sheet_to_json(wb.Sheets.Goal, { header: 1, raw: false, defval: "" }) : [];
+        function st(v) { return REV[String(v).trim().toLowerCase()] || "todo"; }
+        state = { title: (goal[0] && goal[0][1]) || "Epic breakdown", deadline: (goal[1] && /^\d{4}-\d{2}-\d{2}$/.test(goal[1][1]) ? goal[1][1] : "2026-11-30"),
+          epics: rows.map(function (r) { return { id: uid(), saga: String(r[0]).trim() || "Other", key: String(r[1]).trim(), title: String(r[2]).trim(), jira: String(r[3]).trim(),
+            s: { UX: st(r[4]), BE: st(r[5]), FE: st(r[6]) }, next: String(r[7]).trim(), notes: String(r[8]).trim() }; }) };
+        save(); hideBanner(); render();
+      } catch (err) { showBanner("Couldn't open the file. " + (err && err.message ? err.message : ""), false); }
+    };
+    i.click();
+  };
+
+  if (state.example) showBanner("Example data. Replace it with your epics, or start empty.", true);
+  render();
+})();
+</script>
+</body>
+</html>
